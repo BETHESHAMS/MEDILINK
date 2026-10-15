@@ -42,3 +42,19 @@ class Doctor(Base):
 
     availability = Column(String, nullable=False)
     rating = Column(Float, default=0.0)
+
+
+class Appointment(Base):
+    __tablename__ = "appointments"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    patient_id = Column(Integer, nullable=False)
+    doctor_id = Column(Integer, nullable=False)
+
+    appointment_date = Column(String, nullable=False)
+    appointment_time = Column(String, nullable=False)
+
+    status = Column(String, default="Booked")
+
+    reason = Column(Text, nullable=True)

@@ -1,9 +1,17 @@
 from fastapi import FastAPI, Depends
 from sqlalchemy.orm import Session
 
+from fastapi import HTTPException
 from database import engine, Base, SessionLocal
 import models
-from schemas import PatientCreate, PatientUpdate, DoctorCreate, SymptomRequest
+from schemas import (
+    PatientCreate,
+    PatientUpdate,
+    DoctorCreate,
+    SymptomRequest,
+    AppointmentCreate,
+    AppointmentUpdate
+)
 
 
 Base.metadata.create_all(bind=engine)
@@ -231,3 +239,89 @@ def analyze_symptoms(data: SymptomRequest):
         "recommended_specialization": specialization,
         "emergency": emergency
     }
+
+
+
+@app.get("/patients/{patient_id}/appointments")
+def get_patient_appointments(
+    patient_id: int,
+    db: Session = Depends(get_db)
+):
+
+    appointments = db.query(models.Appointment).filter(
+        models.Appointment.patient_id == patient_id
+    ).all()
+
+    return appointments
+
+
+@app.get("/doctors/{doctor_id}/appointments")
+def get_doctor_appointments(
+    doctor_id: int,
+    db: Session = Depends(get_db)
+):
+
+    appointments = db.query(models.Appointment).filter(
+        models.Appointment.doctor_id == doctor_id
+    ).all()
+
+    return appointments
+
+
+@app.post("/appointments")
+def create_appointment(
+    appointment: AppointmentCreate,
+    db: Session = Depends(get_db)
+):
+
+    # 1. Check if patient exists
+    patient = db.query(models.Patient).filter(
+        models.Patient.id == appointment.patient_id
+    ).first()
+
+    if patient is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Patient not found"
+        )
+
+    # 2. Check if doctor exists
+    doctor = db.query(models.Doctor).filter(
+        models.Doctor.id == appointment.doctor_id
+    ).first()
+
+    if doctor is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Doctor not found"
+        )
+
+    # 3. Check if doctor is already booked
+    existing_appointment = db.query(models.Appointment).filter(
+        models.Appointment.doctor_id == appointment.doctor_id,
+        models.Appointment.appointment_date == appointment.appointment_date,
+        models.Appointment.appointment_time == appointment.appointment_time,
+        models.Appointment.status == "Booked"
+    ).first()
+
+    if existing_appointment:
+        raise HTTPException(
+            status_code=409,
+            detail="Doctor is already booked at this date and time"
+        )
+
+    # 4. Create appointment
+    new_appointment = models.Appointment(
+        patient_id=appointment.patient_id,
+        doctor_id=appointment.doctor_id,
+        appointment_date=appointment.appointment_date,
+        appointment_time=appointment.appointment_time,
+        reason=appointment.reason,
+        status="Booked"
+    )
+
+    db.add(new_appointment)
+    db.commit()
+    db.refresh(new_appointment)
+
+    return new_appointment

@@ -53,3 +53,14 @@ class DoctorCreate(BaseModel):
 
 class SymptomRequest(BaseModel):
     symptoms: str
+
+
+class AppointmentCreate(BaseModel):
+    patient_id: int
+    doctor_id: int
+    appointment_date: str
+    appointment_time: str
+    reason: str | None = None
+
+class AppointmentUpdate(BaseModel):
+    status: str
