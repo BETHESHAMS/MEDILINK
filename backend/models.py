@@ -58,3 +58,34 @@ class Appointment(Base):
     status = Column(String, default="Booked")
 
     reason = Column(Text, nullable=True)
+
+
+
+class Consultation(Base):
+    __tablename__ = "consultations"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    appointment_id = Column(Integer, nullable=False)
+    patient_id = Column(Integer, nullable=False)
+    doctor_id = Column(Integer, nullable=False)
+
+    symptoms = Column(Text, nullable=True)
+    doctor_notes = Column(Text, nullable=False)
+    treatment = Column(Text, nullable=True)
+    prescription = Column(Text, nullable=True)
+    follow_up_date = Column(String, nullable=True)
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    email = Column(String, unique=True, index=True, nullable=False)
+    hashed_password = Column(String, nullable=False)
+
+    role = Column(String, nullable=False)
+
+    patient_id = Column(Integer, nullable=True)
+    doctor_id = Column(Integer, nullable=True)

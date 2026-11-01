@@ -64,3 +64,24 @@ class AppointmentCreate(BaseModel):
 
 class AppointmentUpdate(BaseModel):
     status: str
+
+
+
+class ConsultationCreate(BaseModel):
+    appointment_id: int
+    symptoms: Optional[str] = None
+    doctor_notes: str
+    treatment: Optional[str] = None
+    prescription: Optional[str] = None
+    follow_up_date: Optional[str] = None
+
+class UserRegister(BaseModel):
+    email: str
+    password: str
+    role: str
+    patient_id: Optional[int] = None
+    doctor_id: Optional[int] = None
+
+class UserLogin(BaseModel):
+    email: str
+    password: str
