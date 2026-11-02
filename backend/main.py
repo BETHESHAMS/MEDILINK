@@ -651,7 +651,8 @@ def cancel_appointment(
 @app.post("/consultations")
 def create_consultation(
     consultation: ConsultationCreate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_role("doctor"))
 ):
     # Find the appointment
     appointment = db.query(models.Appointment).filter(
@@ -663,6 +664,12 @@ def create_consultation(
             status_code=404,
             detail="Appointment not found"
         )
+    # Verify that this appointment belongs to the logged-in doctor
+    if appointment.doctor_id != current_user.doctor_id:
+        raise HTTPException(
+            status_code=403,
+            detail="You can only create consultations for your own appointments"
+    )
 
     # Prevent a consultation for an appointment that is not booked
     if appointment.status != "Booked":
@@ -702,8 +709,35 @@ def create_consultation(
 @app.get("/patients/{patient_id}/consultations")
 def get_patient_consultations(
     patient_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
 ):
+        # Allow patients to access only their own records
+    if current_user.role == "patient":
+        if current_user.patient_id != patient_id:
+            raise HTTPException(
+                status_code=403,
+                detail="You can only access your own consultation history"
+            )
+
+    # Allow doctors only if they have treated this patient
+    elif current_user.role == "doctor":
+        has_treated_patient = db.query(models.Consultation).filter(
+            models.Consultation.patient_id == patient_id,
+            models.Consultation.doctor_id == current_user.doctor_id
+        ).first()
+
+        if not has_treated_patient:
+            raise HTTPException(
+                status_code=403,
+                detail="You are not authorized to access this patient's consultation history"
+            )
+
+    else:
+        raise HTTPException(
+            status_code=403,
+            detail="You do not have permission to access consultation history"
+        )
     # Check whether the patient exists
     patient = db.query(models.Patient).filter(
         models.Patient.id == patient_id
@@ -727,8 +761,15 @@ def get_patient_consultations(
 @app.get("/doctors/{doctor_id}/consultations")
 def get_doctor_consultations(
     doctor_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_role("doctor"))
 ):
+        # Verify that the logged-in doctor owns this profile
+    if current_user.doctor_id != doctor_id:
+        raise HTTPException(
+            status_code=403,
+            detail="You can only access your own consultation records"
+        )
     # Check whether the doctor exists
     doctor = db.query(models.Doctor).filter(
         models.Doctor.id == doctor_id
