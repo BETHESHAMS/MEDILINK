@@ -131,6 +131,16 @@ def require_role(required_role: str):
         return current_user
 
     return role_checker
+def require_admin(
+    current_user: models.User = Depends(get_current_user)
+):
+    if current_user.role != "admin":
+        raise HTTPException(
+            status_code=403,
+            detail="Admin access required"
+        )
+
+    return current_user
 
 @app.get("/me")
 def get_my_profile(
@@ -187,8 +197,15 @@ def create_patient(patient: PatientCreate, db: Session = Depends(get_db)):
 def update_patient(
     patient_id: int,
     patient: PatientUpdate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_role("patient"))
 ):
+        # Verify that the logged-in patient owns this profile
+    if current_user.patient_id != patient_id:
+        raise HTTPException(
+            status_code=403,
+            detail="You can only update your own profile"
+        )
 
     existing_patient = db.query(models.Patient).filter(
         models.Patient.id == patient_id
@@ -608,7 +625,8 @@ def create_appointment(
 @app.patch("/appointments/{appointment_id}/cancel")
 def cancel_appointment(
     appointment_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_role("patient"))
 ):
     # Find the appointment
     appointment = db.query(models.Appointment).filter(
@@ -621,6 +639,13 @@ def cancel_appointment(
             status_code=404,
             detail="Appointment not found"
         )
+    # Verify appointment ownership
+    if appointment.patient_id != current_user.patient_id:
+        raise HTTPException(
+             status_code=403,
+            detail="You can only cancel your own appointments"
+    )
+    
 
     # Check whether it is already cancelled
     if appointment.status == "Cancelled":
@@ -874,7 +899,7 @@ def register_user(
     if user.role not in ["patient", "doctor"]:
         raise HTTPException(
             status_code=400,
-            detail="Role must be patient or doctor"
+            detail="Role must be patient or doctor "
         )
 
     if user.role == "patient":
