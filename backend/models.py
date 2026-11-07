@@ -1,5 +1,6 @@
-from sqlalchemy import Column, Integer, String, Text, Float
+
 from database import Base
+from sqlalchemy import Column, Integer, String, Text, Float, Boolean
 
 
 class Patient(Base):
@@ -42,6 +43,7 @@ class Doctor(Base):
 
     availability = Column(String, nullable=False)
     rating = Column(Float, default=0.0)
+    is_active = Column(Boolean, default=True, nullable=False)
 
 
 class Appointment(Base):

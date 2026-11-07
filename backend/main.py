@@ -8,12 +8,14 @@ from datetime import datetime, date, time, timedelta, timedelta, timezone
 from fastapi import Query
 
 from pwdlib import PasswordHash
-from schemas import UserRegister, UserLogin
+from schemas import  UserLogin, PatientRegister, DoctorUpdate
 
 
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 from jwt.exceptions import InvalidTokenError
+
+from sqlalchemy.exc import IntegrityError
 
 
 
@@ -27,7 +29,7 @@ from schemas import UserLogin
 
 import models
 from schemas import (
-    PatientCreate,
+    DoctorAccountCreate,
     PatientUpdate,
     DoctorCreate,
     SymptomRequest,
@@ -164,34 +166,7 @@ def home():
     }
 
 
-@app.post("/patients")
-def create_patient(patient: PatientCreate, db: Session = Depends(get_db)):
 
-    new_patient = models.Patient(
-        name=patient.name,
-        email=patient.email,
-        age=patient.age,
-        gender=patient.gender,
-        phone=patient.phone,
-        location=patient.location,
-
-        # Medical information
-        blood_group=patient.blood_group,
-        allergies=patient.allergies,
-        medical_conditions=patient.medical_conditions,
-        current_medications=patient.current_medications,
-        previous_surgeries=patient.previous_surgeries,
-
-        # Emergency contact
-        emergency_contact_name=patient.emergency_contact_name,
-        emergency_contact_phone=patient.emergency_contact_phone
-    )
-
-    db.add(new_patient)
-    db.commit()
-    db.refresh(new_patient)
-
-    return new_patient
 
 @app.put("/patients/{patient_id}")
 def update_patient(
@@ -212,9 +187,10 @@ def update_patient(
     ).first()
 
     if existing_patient is None:
-        return {
-            "message": "Patient not found"
-        }
+        raise HTTPException(
+            status_code=404,
+            detail="Patient not found"
+        )
 
     if patient.phone is not None:
         existing_patient.phone = patient.phone
@@ -248,11 +224,53 @@ def update_patient(
 
     return existing_patient
 
+@app.get("/patients/{patient_id}")
+def get_patient_profile(
+    patient_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_role("patient"))
+):
+    # Verify that the logged-in patient owns this profile
+    if current_user.patient_id != patient_id:
+        raise HTTPException(
+            status_code=403,
+            detail="You can only view your own profile"
+        )
+
+    patient = db.query(models.Patient).filter(
+        models.Patient.id == patient_id
+    ).first()
+
+    if patient is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Patient not found"
+        )
+
+    return {
+        "id": patient.id,
+        "name": patient.name,
+        "email": patient.email,
+        "age": patient.age,
+        "gender": patient.gender,
+        "phone": patient.phone,
+        "location": patient.location,
+        "blood_group": patient.blood_group,
+        "allergies": patient.allergies,
+        "medical_conditions": patient.medical_conditions,
+        "current_medications": patient.current_medications,
+        "previous_surgeries": patient.previous_surgeries,
+        "emergency_contact_name": patient.emergency_contact_name,
+        "emergency_contact_phone": patient.emergency_contact_phone
+    }
+
+
 
 @app.post("/doctors")
 def create_doctor(
     doctor: DoctorCreate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_admin)
 ):
 
     new_doctor = models.Doctor(
@@ -273,12 +291,161 @@ def create_doctor(
 
     return new_doctor
 
+
+
+
+@app.post("/doctors/create-account")
+def create_doctor_account(
+    account: DoctorAccountCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_admin)
+):
+    # Find the existing doctor profile
+    doctor = db.query(models.Doctor).filter(
+        models.Doctor.id == account.doctor_id
+    ).first()
+
+    if doctor is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Doctor not found"
+        )
+
+    # Check whether this doctor already has an account
+    existing_doctor_user = db.query(models.User).filter(
+        models.User.doctor_id == doctor.id
+    ).first()
+
+    if existing_doctor_user:
+        raise HTTPException(
+            status_code=409,
+            detail="This doctor already has a login account"
+        )
+
+    # Check whether the email is already registered
+    email = doctor.email.strip().lower()
+
+    existing_email = db.query(models.User).filter(
+        models.User.email == email
+    ).first()
+
+    if existing_email:
+        raise HTTPException(
+            status_code=409,
+            detail="This email is already registered"
+        )
+
+    # Create the doctor's login account
+    new_user = models.User(
+        email=email,
+        hashed_password=password_hash.hash(account.password),
+        role="doctor",
+        patient_id=None,
+        doctor_id=doctor.id
+    )
+
+    db.add(new_user)
+
+    try:
+        db.commit()
+        db.refresh(new_user)
+
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="An account with this email or doctor ID already exists"
+        )
+
+    return {
+        "message": "Doctor account created successfully",
+        "user_id": new_user.id,
+        "doctor_id": doctor.id,
+        "email": new_user.email,
+        "role": new_user.role
+    }
+
+
+
+
+@app.put("/doctors/{doctor_id}")
+def update_doctor(
+    doctor_id: int,
+    doctor: DoctorUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    existing_doctor = db.query(models.Doctor).filter(
+        models.Doctor.id == doctor_id
+    ).first()
+
+    if existing_doctor is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Doctor not found"
+        )
+
+    # Admins can update any doctor.
+    # Doctors can update only their own profile.
+    if current_user.role != "admin":
+        if (
+            current_user.role != "doctor"
+            or current_user.doctor_id != doctor_id
+        ):
+            raise HTTPException(
+                status_code=403,
+                detail="You can only update your own doctor profile"
+            )
+
+    update_data = doctor.model_dump(exclude_unset=True)
+
+    for field, value in update_data.items():
+        setattr(existing_doctor, field, value)
+
+    db.commit()
+    db.refresh(existing_doctor)
+
+    return existing_doctor
+
+
+
+
 @app.get("/doctors")
 def get_doctors(db: Session = Depends(get_db)):
 
     doctors = db.query(models.Doctor).all()
 
     return doctors
+
+
+
+@app.get("/doctors/{doctor_id}")
+def get_doctor_profile(
+    doctor_id: int,
+    db: Session = Depends(get_db)
+):
+    doctor = db.query(models.Doctor).filter(
+        models.Doctor.id == doctor_id
+    ).first()
+
+    if doctor is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Doctor not found"
+        )
+
+    return {
+        "id": doctor.id,
+        "name": doctor.name,
+        "specialization": doctor.specialization,
+        "experience": doctor.experience,
+        "hospital": doctor.hospital,
+        "location": doctor.location,
+        "availability": doctor.availability,
+        "rating": doctor.rating
+    }
+
+
 
 
 @app.get("/recommend-doctors")
@@ -559,6 +726,17 @@ def create_appointment(
             status_code=400,
             detail="Use date YYYY-MM-DD and time HH:MM"
         )
+    # Reject appointments scheduled in the past
+    requested_datetime = datetime.combine(
+        requested_date,
+        requested_time
+)
+
+    if requested_datetime <= datetime.now():
+        raise HTTPException(
+            status_code=400,
+            detail="You cannot book an appointment in the past"
+        )
 
     # 4. Check the doctor's supported working schedule
     availability = doctor.availability.replace(" ", "").upper()
@@ -615,8 +793,17 @@ def create_appointment(
     )
 
     db.add(new_appointment)
-    db.commit()
-    db.refresh(new_appointment)
+
+    try:
+        db.commit()
+        db.refresh(new_appointment)
+
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="This appointment slot has just been booked. Please choose another slot."
+        )
 
     return new_appointment
 
@@ -695,6 +882,18 @@ def create_consultation(
             status_code=403,
             detail="You can only create consultations for your own appointments"
     )
+    
+    # Check whether a consultation already exists
+    existing_consultation = db.query(models.Consultation).filter(
+        models.Consultation.appointment_id == appointment.id
+    ).first()
+
+    if existing_consultation:
+        raise HTTPException(
+            status_code=409,
+            detail="A consultation already exists for this appointment"
+        )
+
 
     # Prevent a consultation for an appointment that is not booked
     if appointment.status != "Booked":
@@ -715,13 +914,23 @@ def create_consultation(
         follow_up_date=consultation.follow_up_date
     )
 
+    
     db.add(new_consultation)
 
     # Mark the appointment as completed
     appointment.status = "Completed"
 
-    db.commit()
-    db.refresh(new_consultation)
+    try:
+        db.commit()
+        db.refresh(new_consultation)
+
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="A consultation already exists for this appointment"
+        )
+
 
     return {
         "message": "Consultation saved successfully",
@@ -880,13 +1089,15 @@ def get_available_slots(
 
 
 @app.post("/register")
-def register_user(
-    user: UserRegister,
+def register_patient(
+    patient: PatientRegister,
     db: Session = Depends(get_db)
 ):
-    # 1. Check whether the email is already registered
+    email = patient.email.strip().lower()
+
+    # 1. Check whether this email already has a login account
     existing_user = db.query(models.User).filter(
-        models.User.email == user.email.lower()
+        models.User.email == email
     ).first()
 
     if existing_user:
@@ -895,64 +1106,68 @@ def register_user(
             detail="Email is already registered"
         )
 
-    # 2. Validate the role and linked account
-    if user.role not in ["patient", "doctor"]:
+    # 2. Prevent duplicate patient profiles
+    existing_patient = db.query(models.Patient).filter(
+        models.Patient.email == email
+    ).first()
+
+    if existing_patient:
         raise HTTPException(
-            status_code=400,
-            detail="Role must be patient or doctor "
+            status_code=409,
+            detail="A patient profile with this email already exists"
         )
 
-    if user.role == "patient":
-        if user.patient_id is None or user.doctor_id is not None:
-            raise HTTPException(
-                status_code=400,
-                detail="Provide only a valid patient_id for a patient account"
-            )
-
-        linked_record = db.query(models.Patient).filter(
-            models.Patient.id == user.patient_id
-        ).first()
-
-    else:
-        if user.doctor_id is None or user.patient_id is not None:
-            raise HTTPException(
-                status_code=400,
-                detail="Provide only a valid doctor_id for a doctor account"
-            )
-
-        linked_record = db.query(models.Doctor).filter(
-            models.Doctor.id == user.doctor_id
-        ).first()
-
-    if linked_record is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Linked patient or doctor record not found"
+    try:
+        # 3. Create the patient profile
+        new_patient = models.Patient(
+            name=patient.name,
+            email=email,
+            age=patient.age,
+            gender=patient.gender,
+            phone=patient.phone,
+            location=patient.location,
+            blood_group=patient.blood_group,
+            allergies=patient.allergies,
+            medical_conditions=patient.medical_conditions,
+            current_medications=patient.current_medications,
+            previous_surgeries=patient.previous_surgeries,
+            emergency_contact_name=patient.emergency_contact_name,
+            emergency_contact_phone=patient.emergency_contact_phone
         )
 
-    # 3. Hash the password
-    hashed_password = password_hash.hash(user.password)
+        db.add(new_patient)
 
-    # 4. Create the login account
-    new_user = models.User(
-        email=user.email.lower(),
-        hashed_password=hashed_password,
-        role=user.role,
-        patient_id=user.patient_id,
-        doctor_id=user.doctor_id
-    )
+        # Generate the patient ID without committing yet
+        db.flush()
 
-    db.add(new_user)
-    db.commit()
-    db.refresh(new_user)
+        # 4. Create the linked login account
+        new_user = models.User(
+            email=email,
+            hashed_password=password_hash.hash(patient.password),
+            role="patient",
+            patient_id=new_patient.id,
+            doctor_id=None
+        )
 
-    # Never return the password or its hash
-    return {
-        "message": "User registered successfully",
-        "user_id": new_user.id,
-        "email": new_user.email,
-        "role": new_user.role
-    }
+        db.add(new_user)
+
+        # 5. Save both records together
+        db.commit()
+
+        db.refresh(new_patient)
+        db.refresh(new_user)
+
+        return {
+            "message": "Patient registered successfully",
+            "patient_id": new_patient.id,
+            "user_id": new_user.id,
+            "email": new_user.email,
+            "role": new_user.role
+        }
+
+    except Exception:
+        db.rollback()
+        raise
 
 @app.post("/login")
 def login_user(
