@@ -1,5 +1,6 @@
 
 import { useState } from "react";
+import axios from "axios";
 import {
   Activity,
   ArrowRight,
@@ -14,7 +15,14 @@ import {
   Users,
   Video,
   X,
+  Sparkles,
+  Bot,
+  Star,
+  Building2,
+  MapPin,
+  Calendar,
 } from "lucide-react";
+import SmartIntakeBot from "./components/SmartIntakeBot";
 
 const specialties = [
   { name: "Cardiology", icon: HeartPulse, color: "bg-rose-50 text-rose-600" },
@@ -49,14 +57,30 @@ const features = [
 
 function App() {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [searchMode, setSearchMode] = useState("bot"); // "bot" or "manual"
   const [specialty, setSpecialty] = useState("");
   const [location, setLocation] = useState("");
+  const [manualDoctors, setManualDoctors] = useState([]);
+  const [searching, setSearching] = useState(false);
+  const [hasSearched, setHasSearched] = useState(false);
 
-  const handleSearch = (event) => {
-    event.preventDefault();
-    alert(
-      `Doctor search selected: ${specialty || "Any specialty"} | ${location || "Any location"}`
-    );
+  const handleSearch = async (event) => {
+    if (event) event.preventDefault();
+    setSearching(true);
+    setHasSearched(true);
+    try {
+      const res = await axios.get(
+        `http://127.0.0.1:8000/recommend-doctors?specialization=${encodeURIComponent(
+          specialty
+        )}${location ? `&location=${encodeURIComponent(location)}` : ""}`
+      );
+      setManualDoctors(res.data);
+    } catch (err) {
+      console.error("Doctor search error:", err);
+      setManualDoctors([]);
+    } finally {
+      setSearching(false);
+    }
   };
 
   return (
@@ -167,34 +191,144 @@ function App() {
           </div>
         </section>
 
-        {/* Search */}
-        <section id="find-doctor" className="relative z-10 mx-auto -mt-1 max-w-5xl px-6 py-12">
-          <div className="rounded-3xl border border-slate-100 bg-white p-6 shadow-xl shadow-slate-200/60 md:p-8">
-            <h2 className="mb-5 text-xl font-bold">Find the right doctor for you</h2>
-            <form onSubmit={handleSearch} className="grid gap-4 md:grid-cols-3">
-              <select
-                value={specialty}
-                onChange={(e) => setSpecialty(e.target.value)}
-                className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-4 outline-none focus:border-blue-500"
+        {/* Find Doctor / Smart Intake Section */}
+        <section id="find-doctor" className="relative z-10 mx-auto -mt-6 max-w-5xl px-6 py-12">
+          {/* Mode Switcher Tabs */}
+          <div className="mb-6 flex justify-center">
+            <div className="inline-flex rounded-2xl bg-slate-100 p-1.5 shadow-inner">
+              <button
+                onClick={() => setSearchMode("bot")}
+                className={`flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-bold transition ${
+                  searchMode === "bot"
+                    ? "bg-white text-blue-600 shadow-md shadow-slate-200"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
               >
-                <option value="">All specialties</option>
-                {specialties.map((item) => (
-                  <option key={item.name} value={item.name}>{item.name}</option>
-                ))}
-              </select>
-
-              <input
-                value={location}
-                onChange={(e) => setLocation(e.target.value)}
-                placeholder="Enter your location"
-                className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-4 outline-none focus:border-blue-500"
-              />
-
-              <button type="submit" className="rounded-xl bg-blue-600 px-5 py-4 font-semibold text-white hover:bg-blue-700">
-                <Search className="mr-2 inline" size={18} /> Search doctors
+                <Sparkles size={16} className="text-blue-600" />
+                Smart AI Symptom Intake
+                <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-extrabold text-blue-700">
+                  NEW
+                </span>
               </button>
-            </form>
+
+              <button
+                onClick={() => setSearchMode("manual")}
+                className={`flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-bold transition ${
+                  searchMode === "manual"
+                    ? "bg-white text-blue-600 shadow-md shadow-slate-200"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                <Search size={16} />
+                Filter by Specialty
+              </button>
+            </div>
           </div>
+
+          {searchMode === "bot" ? (
+            /* Smart Conversational Intake Bot with Photo Attachment */
+            <SmartIntakeBot />
+          ) : (
+            /* Traditional Filter Form */
+            <div className="rounded-3xl border border-slate-100 bg-white p-6 shadow-xl shadow-slate-200/60 md:p-8">
+              <h2 className="mb-5 text-xl font-bold text-slate-900">
+                Search specialists directly
+              </h2>
+              <form onSubmit={handleSearch} className="grid gap-4 md:grid-cols-3">
+                <select
+                  value={specialty}
+                  onChange={(e) => setSpecialty(e.target.value)}
+                  className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-4 outline-none transition focus:border-blue-500 focus:bg-white"
+                >
+                  <option value="">All specialties</option>
+                  {specialties.map((item) => (
+                    <option key={item.name} value={item.name}>
+                      {item.name}
+                    </option>
+                  ))}
+                </select>
+
+                <input
+                  value={location}
+                  onChange={(e) => setLocation(e.target.value)}
+                  placeholder="Enter location (e.g. New York)"
+                  className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-4 outline-none transition focus:border-blue-500 focus:bg-white"
+                />
+
+                <button
+                  type="submit"
+                  disabled={searching}
+                  className="flex items-center justify-center rounded-xl bg-blue-600 px-5 py-4 font-semibold text-white shadow-md shadow-blue-500/20 transition hover:bg-blue-700 disabled:opacity-50"
+                >
+                  <Search className="mr-2 inline" size={18} />
+                  {searching ? "Searching..." : "Search doctors"}
+                </button>
+              </form>
+
+              {/* Live Search Results */}
+              {hasSearched && (
+                <div className="mt-8 border-t border-slate-100 pt-6">
+                  <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500 mb-4">
+                    Matching Specialists ({manualDoctors.length})
+                  </h3>
+
+                  {manualDoctors.length === 0 ? (
+                    <p className="rounded-xl bg-slate-50 p-4 text-center text-sm text-slate-500">
+                      No active doctors found matching these criteria. Try choosing &quot;All specialties&quot; or clear the location.
+                    </p>
+                  ) : (
+                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                      {manualDoctors.map((doc) => (
+                        <div
+                          key={doc.id}
+                          className="flex flex-col justify-between rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-blue-300 hover:shadow-md"
+                        >
+                          <div>
+                            <div className="flex items-start justify-between">
+                              <h4 className="font-bold text-slate-900">{doc.name}</h4>
+                              <span className="flex items-center gap-1 rounded bg-amber-50 px-2 py-0.5 text-xs font-bold text-amber-700">
+                                <Star size={12} className="fill-amber-400 text-amber-400" />
+                                {doc.rating || "5.0"}
+                              </span>
+                            </div>
+
+                            <span className="mt-1 inline-block rounded-md bg-blue-50 px-2.5 py-0.5 text-xs font-semibold text-blue-700">
+                              {doc.specialization}
+                            </span>
+
+                            <div className="mt-4 space-y-1.5 text-xs text-slate-600">
+                              <p className="flex items-center gap-1.5">
+                                <Building2 size={13} className="text-slate-400" />
+                                {doc.hospital}
+                              </p>
+                              <p className="flex items-center gap-1.5">
+                                <MapPin size={13} className="text-slate-400" />
+                                {doc.location}
+                              </p>
+                              <p className="flex items-center gap-1.5">
+                                <Clock size={13} className="text-slate-400" />
+                                {doc.experience} yrs exp • {doc.availability}
+                              </p>
+                            </div>
+                          </div>
+
+                          <button
+                            onClick={() => {
+                              alert(`Booking initiated for ${doc.name}. Log in to complete booking.`);
+                            }}
+                            className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 py-2.5 text-xs font-semibold text-white transition hover:bg-blue-700"
+                          >
+                            <Calendar size={14} />
+                            Book Appointment
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </section>
 
         {/* Specialties */}
@@ -215,6 +349,7 @@ function App() {
                   key={item.name}
                   onClick={() => {
                     setSpecialty(item.name);
+                    setSearchMode("manual");
                     document.getElementById("find-doctor").scrollIntoView({ behavior: "smooth" });
                   }}
                   className="rounded-2xl border border-slate-100 bg-white p-6 text-left shadow-sm transition hover:-translate-y-1 hover:border-blue-200 hover:shadow-lg"
