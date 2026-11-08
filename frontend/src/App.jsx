@@ -21,8 +21,10 @@ import {
   Building2,
   MapPin,
   Calendar,
+  LocateFixed,
 } from "lucide-react";
 import SmartIntakeBot from "./components/SmartIntakeBot";
+import { detectUserLocation } from "./utils/geolocation";
 
 const specialties = [
   { name: "Cardiology", icon: HeartPulse, color: "bg-rose-50 text-rose-600" },
@@ -248,12 +250,29 @@ function App() {
                   ))}
                 </select>
 
-                <input
-                  value={location}
-                  onChange={(e) => setLocation(e.target.value)}
-                  placeholder="Enter location (e.g. New York)"
-                  className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-4 outline-none transition focus:border-blue-500 focus:bg-white"
-                />
+                <div className="relative flex items-center">
+                  <input
+                    value={location}
+                    onChange={(e) => setLocation(e.target.value)}
+                    placeholder="Enter location (e.g. Delhi)"
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-4 pr-12 outline-none transition focus:border-blue-500 focus:bg-white"
+                  />
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        const loc = await detectUserLocation();
+                        setLocation(loc.city || loc.formatted || "");
+                      } catch (err) {
+                        alert(err.message);
+                      }
+                    }}
+                    className="absolute right-3 rounded-lg p-2 text-slate-400 transition hover:bg-slate-200/50 hover:text-blue-600"
+                    title="Auto-detect current location (GPS)"
+                  >
+                    <LocateFixed size={18} />
+                  </button>
+                </div>
 
                 <button
                   type="submit"

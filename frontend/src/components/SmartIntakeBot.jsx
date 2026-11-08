@@ -16,8 +16,10 @@ import {
   ShieldCheck,
   RotateCcw,
   User,
-  Bot
+  Bot,
+  LocateFixed,
 } from "lucide-react";
+import { detectUserLocation } from "../utils/geolocation";
 
 const API_BASE = "http://127.0.0.1:8000";
 
@@ -97,9 +99,103 @@ export default function SmartIntakeBot() {
     setMessages((prev) => [...prev, newMsg]);
   };
 
+  const handleAutoDetectLocation = async () => {
+    addMessage("user", {
+      text: "📍 Requesting my current GPS location...",
+    });
+    setLoading(true);
+
+    try {
+      const loc = await detectUserLocation();
+      const detectedCity = loc.formatted || loc.city || "Current Location";
+      setPatientContext((prev) => ({ ...prev, location: detectedCity }));
+
+      const specParam = activeSpecialty ? `specialization=${encodeURIComponent(activeSpecialty)}` : "";
+      let doctors = [];
+
+      // Try searching for the detected location
+      try {
+        const res1 = await axios.get(
+          `${API_BASE}/recommend-doctors?${specParam}&location=${encodeURIComponent(loc.city || detectedCity)}`
+        );
+        doctors = res1.data || [];
+      } catch {
+        doctors = [];
+      }
+
+      // Try fallback to broad city if exact locality had 0
+      if (doctors.length === 0 && loc.city) {
+        try {
+          const res2 = await axios.get(
+            `${API_BASE}/recommend-doctors?${specParam}&location=${encodeURIComponent(loc.city)}`
+          );
+          doctors = res2.data || [];
+        } catch {
+          // ignore
+        }
+      }
+
+      setTimeout(async () => {
+        if (doctors.length > 0) {
+          setRecommendedDoctors(doctors);
+          addMessage("bot", {
+            text: `📍 GPS Detected: **"${detectedCity}"**.\nFound **${doctors.length} specialist(s)**${
+              activeSpecialty ? ` in **${activeSpecialty}**` : ""
+            } nearby:`,
+            doctorCards: doctors,
+          });
+        } else {
+          try {
+            const fallbackRes = await axios.get(`${API_BASE}/recommend-doctors?${specParam}`);
+            const fallbackDocs = fallbackRes.data || [];
+            const finalDocs = fallbackDocs.length > 0 ? fallbackDocs : (await axios.get(`${API_BASE}/doctors`)).data;
+            setRecommendedDoctors(finalDocs);
+
+            addMessage("bot", {
+              text: `📍 GPS Detected: **"${detectedCity}"**.\nWe don't have doctors directly registered in ${detectedCity} for ${
+                activeSpecialty || "this condition"
+              } yet. Here are the top available verified doctors on MediLink:`,
+              doctorCards: finalDocs,
+            });
+          } catch {
+            addMessage("bot", {
+              text: `📍 GPS Detected: **"${detectedCity}"**. You can also choose or type another city:`,
+              quickReplies: ["Delhi", "Noida", "Mumbai", "Any location"],
+            });
+          }
+        }
+        setStep("doctors");
+        setLoading(false);
+      }, 500);
+    } catch (err) {
+      console.error("Location error:", err);
+      setTimeout(() => {
+        addMessage("bot", {
+          text: `⚠️ ${err.message || "Could not detect location."}\n\nYou can manually type your city or choose a quick option below:`,
+          quickReplies: ["Delhi", "Noida", "Mumbai", "Any location"],
+        });
+        setLoading(false);
+      }, 400);
+    }
+  };
+
   const handleSendMessage = async (textToSend = inputText) => {
     const text = textToSend.trim();
     if (!text && !selectedImage) return;
+
+    const lower = text.toLowerCase();
+
+    // Check if user clicked auto detect prompt
+    if (
+      lower.includes("auto-detect") ||
+      lower.includes("auto detect") ||
+      lower.includes("detect my location") ||
+      text.includes("Auto-detect My Location")
+    ) {
+      setInputText("");
+      handleAutoDetectLocation();
+      return;
+    }
 
     // Add user message
     addMessage("user", {
@@ -111,8 +207,6 @@ export default function SmartIntakeBot() {
     const currentImg = imagePreview;
     removeSelectedImage();
     setLoading(true);
-
-    const lower = text.toLowerCase();
 
     // 1. Reset / Restart intent
     if (lower === "reset" || lower === "restart" || lower === "start over" || lower === "clear") {
@@ -256,8 +350,8 @@ export default function SmartIntakeBot() {
         // Context follow-up
         setTimeout(() => {
           addMessage("bot", {
-            text: `Based on your symptoms${currentImg ? " and attached photo" : ""}, this is recommended for a **${recommended_specialization}**.\n\nWhich city or area are you located in? (e.g. Delhi, Noida, Mumbai, etc.)`,
-            quickReplies: ["Delhi", "Noida", "Mumbai", "Any location"],
+            text: `Based on your symptoms${currentImg ? " and attached photo" : ""}, this is recommended for a **${recommended_specialization}**.\n\nWhich city or area are you located in? You can use Auto-detect or choose below:`,
+            quickReplies: ["📍 Auto-detect My Location", "Delhi", "Noida", "Mumbai", "Any location"],
           });
           setStep("context");
           setLoading(false);
@@ -580,6 +674,16 @@ export default function SmartIntakeBot() {
             title="Attach a symptom photo (e.g. skin rash)"
           >
             <Paperclip size={18} />
+          </button>
+
+          {/* Auto-detect Location Button */}
+          <button
+            type="button"
+            onClick={handleAutoDetectLocation}
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-slate-200 text-slate-500 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-600"
+            title="Auto-detect current location (GPS)"
+          >
+            <LocateFixed size={18} />
           </button>
 
           {/* Text Input */}
