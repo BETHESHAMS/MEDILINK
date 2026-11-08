@@ -112,8 +112,128 @@ export default function SmartIntakeBot() {
     removeSelectedImage();
     setLoading(true);
 
+    const lower = text.toLowerCase();
+
+    // 1. Reset / Restart intent
+    if (lower === "reset" || lower === "restart" || lower === "start over" || lower === "clear") {
+      resetChat();
+      setLoading(false);
+      return;
+    }
+
+    // 2. Check if this is a Location Intent
+    const isLocationChange =
+      step === "context" ||
+      lower.includes("location") ||
+      lower.includes("delhi") ||
+      lower.includes("shahen") ||
+      lower.includes("shaheen") ||
+      lower.includes("noida") ||
+      lower.includes("mumbai") ||
+      lower.includes("bangalore") ||
+      lower.includes("seattle") ||
+      lower.includes("york") ||
+      lower.startsWith("in ") ||
+      lower.includes("change my location") ||
+      lower.includes("change location") ||
+      lower.includes("my location");
+
+    // 3. Check if this is a Symptom Intent
+    const symptomKeywords = [
+      "pain", "ache", "rash", "skin", "fever", "cough", "cold", "headache", "chest",
+      "heart", "stomach", "knee", "bone", "joint", "dizzy", "numb", "breath", "bleed",
+      "burn", "infection", "sick", "swelling", "migraine", "vomit", "cramp", "itching",
+      "throat", "hurts", "hurting"
+    ];
+    const isSymptom =
+      Boolean(currentImg) ||
+      step === "symptoms" ||
+      symptomKeywords.some((k) => lower.includes(k));
+
     try {
-      if (step === "symptoms") {
+      if (isLocationChange && !isSymptom) {
+        // Clean location string
+        let cleanLoc = text
+          .replace(/^(no|please|ok|okay)[,\s]+/i, "")
+          .replace(/^(change|update)\s+(my\s+)?location\s+(to|in)\s+/i, "")
+          .replace(/^my\s+location\s+is\s+/i, "")
+          .replace(/^in\s+/i, "")
+          .trim();
+
+        if (cleanLoc.toLowerCase().includes("any")) cleanLoc = "";
+        setPatientContext((prev) => ({ ...prev, location: cleanLoc }));
+
+        let doctors = [];
+        const specParam = activeSpecialty ? `specialization=${encodeURIComponent(activeSpecialty)}` : "";
+
+        // First attempt: clean location
+        try {
+          const res1 = await axios.get(
+            `${API_BASE}/recommend-doctors?${specParam}&location=${encodeURIComponent(cleanLoc)}`
+          );
+          doctors = res1.data || [];
+        } catch {
+          doctors = [];
+        }
+
+        // Second attempt: if 0 results, check individual city words (e.g. "delhi" or "shaheen")
+        if (doctors.length === 0 && cleanLoc) {
+          const parts = cleanLoc
+            .split(/[\s,]+/i)
+            .filter((p) => p.length > 2 && !["in", "near", "at", "the", "my", "bagh"].includes(p.toLowerCase()));
+
+          for (const part of parts) {
+            try {
+              const resPart = await axios.get(
+                `${API_BASE}/recommend-doctors?${specParam}&location=${encodeURIComponent(part)}`
+              );
+              if (resPart.data && resPart.data.length > 0) {
+                doctors = resPart.data;
+                break;
+              }
+            } catch {
+              // continue
+            }
+          }
+        }
+
+        setTimeout(async () => {
+          if (doctors.length > 0) {
+            setRecommendedDoctors(doctors);
+            addMessage("bot", {
+              text: `📍 Location set to **"${cleanLoc}"**. Found **${doctors.length} specialist(s)**${
+                activeSpecialty ? ` in **${activeSpecialty}**` : ""
+              }:`,
+              doctorCards: doctors,
+            });
+          } else {
+            // Fallback: fetch available specialists across the platform so the user gets actual doctor cards
+            try {
+              const fallbackRes = await axios.get(
+                `${API_BASE}/recommend-doctors?${specParam}`
+              );
+              const fallbackDocs = fallbackRes.data || [];
+              const finalDocs = fallbackDocs.length > 0 ? fallbackDocs : (await axios.get(`${API_BASE}/doctors`)).data;
+              setRecommendedDoctors(finalDocs);
+
+              addMessage("bot", {
+                text: `📍 Noted location: **"${cleanLoc}"**.\nWe don't have doctors directly registered in ${cleanLoc} for ${
+                  activeSpecialty || "this care"
+                } yet. Here are verified specialists available across MediLink for consultation:`,
+                doctorCards: finalDocs,
+              });
+            } catch {
+              addMessage("bot", {
+                text: `📍 Noted location: **"${cleanLoc}"**. No doctors found currently. You can try another city or check another symptom.`,
+                quickReplies: ["Delhi", "Noida", "Mumbai", "Check other symptoms"],
+              });
+            }
+          }
+          setStep("doctors");
+          setLoading(false);
+        }, 500);
+
+      } else if (isSymptom) {
         setPatientContext((prev) => ({ ...prev, symptoms: text }));
 
         // Call backend symptom analyzer
@@ -136,56 +256,26 @@ export default function SmartIntakeBot() {
         // Context follow-up
         setTimeout(() => {
           addMessage("bot", {
-            text: `Based on your symptoms${currentImg ? " and uploaded image" : ""}, this is typically handled by **${recommended_specialization}**. To help me match the best nearby doctors, could you share your approximate location or city?`,
-            quickReplies: ["New York", "Los Angeles", "Seattle", "Any location"],
+            text: `Based on your symptoms${currentImg ? " and attached photo" : ""}, this is recommended for a **${recommended_specialization}**.\n\nWhich city or area are you located in? (e.g. Delhi, Noida, Mumbai, etc.)`,
+            quickReplies: ["Delhi", "Noida", "Mumbai", "Any location"],
           });
           setStep("context");
           setLoading(false);
-        }, 700);
-
-      } else if (step === "context") {
-        const userLocation = text.toLowerCase().includes("any") ? "" : text;
-        setPatientContext((prev) => ({ ...prev, location: userLocation }));
-
-        // Fetch doctors
-        const docRes = await axios.get(
-          `${API_BASE}/recommend-doctors?specialization=${encodeURIComponent(activeSpecialty)}${
-            userLocation ? `&location=${encodeURIComponent(userLocation)}` : ""
-          }`
-        );
-
-        const doctors = docRes.data;
-        setRecommendedDoctors(doctors);
-
-        setTimeout(() => {
-          if (doctors.length === 0) {
-            addMessage("bot", {
-              text: `I couldn't find any active doctors for **${activeSpecialty}** in ${
-                userLocation || "your area"
-              }. Here are all available specialists across the platform:`,
-            });
-            // Fallback: fetch all active doctors
-            axios.get(`${API_BASE}/doctors`).then((allDocs) => {
-              addMessage("bot", {
-                doctorCards: allDocs.data,
-              });
-            });
-          } else {
-            addMessage("bot", {
-              text: `Here are the top-rated **${activeSpecialty}** specialists ready for consultation:`,
-              doctorCards: doctors,
-            });
-          }
-          setStep("doctors");
-          setLoading(false);
         }, 600);
+
       } else {
-        // Conversation continuation
-        addMessage("bot", {
-          text: "You can select any doctor card above to check their available slots or book an appointment. Would you like to check another symptom?",
-          canReset: true,
-        });
-        setLoading(false);
+        // Conversation continuation / general
+        setTimeout(() => {
+          addMessage("bot", {
+            text: "I can help route you to the right doctor or update your preferences. What would you like to do?",
+            quickReplies: [
+              "Change location to Delhi",
+              "Check new symptoms",
+              "Show all doctors",
+            ],
+          });
+          setLoading(false);
+        }, 400);
       }
     } catch (err) {
       console.error("API error:", err);
