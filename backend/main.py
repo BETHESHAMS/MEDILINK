@@ -1,4 +1,5 @@
 from fastapi import FastAPI, Depends
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
 from fastapi import HTTPException
@@ -72,6 +73,19 @@ Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000"
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 bearer_scheme = HTTPBearer()
 
 
@@ -118,7 +132,21 @@ def get_current_user(
             headers={"WWW-Authenticate": "Bearer"}
         )
 
+    # Check whether the doctor account is still active
+    if user.role == "doctor":
+        doctor = db.query(models.Doctor).filter(
+            models.Doctor.id == user.doctor_id
+        ).first()
+
+        if doctor is None or not doctor.is_active:
+            raise HTTPException(
+                status_code=403,
+                detail="Your doctor account has been deactivated"
+            )
+
     return user
+
+    
 
 def require_role(required_role: str):
     def role_checker(
@@ -410,12 +438,16 @@ def update_doctor(
 
 
 
+
 @app.get("/doctors")
 def get_doctors(db: Session = Depends(get_db)):
 
-    doctors = db.query(models.Doctor).all()
+    doctors = db.query(models.Doctor).filter(
+        models.Doctor.is_active == True
+    ).all()
 
     return doctors
+
 
 
 
@@ -448,6 +480,7 @@ def get_doctor_profile(
 
 
 
+
 @app.get("/recommend-doctors")
 def recommend_doctors(
     specialization: str,
@@ -456,7 +489,8 @@ def recommend_doctors(
 ):
 
     query = db.query(models.Doctor).filter(
-        models.Doctor.specialization.ilike(f"%{specialization}%")
+        models.Doctor.specialization.ilike(f"%{specialization}%"),
+        models.Doctor.is_active == True
     )
 
     # Filter by location if provided
@@ -467,7 +501,7 @@ def recommend_doctors(
 
     doctors = query.all()
 
-    # Rank doctors
+    # Rank doctors by rating and experience
     doctors.sort(
         key=lambda doctor: (
             doctor.rating,
@@ -477,6 +511,7 @@ def recommend_doctors(
     )
 
     return doctors
+
 
 @app.post("/analyze-symptoms")
 def analyze_symptoms(data: SymptomRequest):
@@ -709,6 +744,11 @@ def create_appointment(
         raise HTTPException(
             status_code=404,
             detail="Doctor not found"
+        )
+    if not doctor.is_active:
+        raise HTTPException(
+            status_code=400,
+            detail="This doctor is currently unavailable for appointments"
         )
 
     # 3. Validate the appointment date and time
@@ -1039,6 +1079,11 @@ def get_available_slots(
             status_code=404,
             detail="Doctor not found"
         )
+    if not doctor.is_active:
+        raise HTTPException(
+            status_code=400,
+            detail="This doctor is currently unavailable for appointments"
+    )
 
     # Check the doctor's availability format
     availability = doctor.availability.replace(" ", "")
@@ -1190,6 +1235,18 @@ def login_user(
             headers={"WWW-Authenticate": "Bearer"}
         )
 
+        # Block inactive doctors from logging in
+    if user.role == "doctor":
+        doctor = db.query(models.Doctor).filter(
+            models.Doctor.id == user.doctor_id
+        ).first()
+
+        if doctor is None or not doctor.is_active:
+            raise HTTPException(
+                status_code=403,
+                detail="Your doctor account is inactive. Please contact the administrator."
+            )
+
     # 3. Generate an access token
     access_token = create_access_token(user)
 
@@ -1199,4 +1256,68 @@ def login_user(
         "token_type": "bearer",
         "expires_in": ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         "role": user.role
+    }
+
+@app.patch("/doctors/{doctor_id}/deactivate")
+def deactivate_doctor(
+    doctor_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_admin)
+):
+    doctor = db.query(models.Doctor).filter(
+        models.Doctor.id == doctor_id
+    ).first()
+
+    if doctor is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Doctor not found"
+        )
+
+    if not doctor.is_active:
+        raise HTTPException(
+            status_code=400,
+            detail="Doctor is already inactive"
+        )
+
+    doctor.is_active = False
+    db.commit()
+    db.refresh(doctor)
+
+    return {
+        "message": "Doctor deactivated successfully",
+        "doctor_id": doctor.id,
+        "is_active": doctor.is_active
+    }
+
+@app.patch("/doctors/{doctor_id}/activate")
+def activate_doctor(
+    doctor_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_admin)
+):
+    doctor = db.query(models.Doctor).filter(
+        models.Doctor.id == doctor_id
+    ).first()
+
+    if doctor is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Doctor not found"
+        )
+
+    if doctor.is_active:
+        raise HTTPException(
+            status_code=400,
+            detail="Doctor is already active"
+        )
+
+    doctor.is_active = True
+    db.commit()
+    db.refresh(doctor)
+
+    return {
+        "message": "Doctor activated successfully",
+        "doctor_id": doctor.id,
+        "is_active": doctor.is_active
     }
