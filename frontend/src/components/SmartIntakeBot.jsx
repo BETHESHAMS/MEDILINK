@@ -20,8 +20,9 @@ import {
   LocateFixed,
 } from "lucide-react";
 import { detectUserLocation } from "../utils/geolocation";
+import { API_BASE_URL } from "../config/api";
 
-const API_BASE = "http://127.0.0.1:8000";
+const API_BASE = API_BASE_URL;
 
 const quickPrompts = [
   { label: "Red itchy skin rash", symptoms: "Red itchy skin rash with swelling for 3 days" },

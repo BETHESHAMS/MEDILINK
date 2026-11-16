@@ -9,7 +9,13 @@ from datetime import datetime, date, time, timedelta, timedelta, timezone
 from fastapi import Query
 
 from pwdlib import PasswordHash
-from schemas import  UserLogin, PatientRegister, DoctorUpdate
+from schemas import (
+    UserLogin,
+    PatientRegister,
+    DoctorUpdate,
+    ChatMessageCreate,
+    ChatMessageResponse
+)
 
 
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -73,14 +79,18 @@ Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 
+cors_env = os.getenv("CORS_ORIGINS")
+allowed_origins = [orig.strip() for orig in cors_env.split(",") if orig.strip()] if cors_env else [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "http://localhost:3000",
-        "http://127.0.0.1:3000"
-    ],
+    allow_origins=allowed_origins,
+    allow_origin_regex=r"https://.*\.railway\.app|https://.*\.vercel\.app|https://.*\.netlify\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -835,17 +845,39 @@ def create_appointment(
     db.add(new_appointment)
 
     try:
+        db.flush()
+
+        # Find an existing conversation between this patient and doctor
+        conversation = db.query(models.ChatConversation).filter(
+            models.ChatConversation.patient_id == current_user.patient_id,
+            models.ChatConversation.doctor_id == appointment.doctor_id
+        ).first()
+
+        # Create a conversation only if one doesn't exist
+        if conversation is None:
+            conversation = models.ChatConversation(
+                patient_id=current_user.patient_id,
+                doctor_id=appointment.doctor_id
+            )
+            db.add(conversation)
+
+        # Save appointment and conversation together
         db.commit()
+
         db.refresh(new_appointment)
+        db.refresh(conversation)
 
     except IntegrityError:
         db.rollback()
         raise HTTPException(
             status_code=409,
-            detail="This appointment slot has just been booked. Please choose another slot."
-        )
-
-    return new_appointment
+            detail="This appointment slot or conversation could not be created. Please try again."
+            )
+    return {
+            "message": "Appointment booked successfully",
+            "appointment": new_appointment,
+            "conversation_id": conversation.id
+        }
 
 
 
@@ -1320,4 +1352,217 @@ def activate_doctor(
         "message": "Doctor activated successfully",
         "doctor_id": doctor.id,
         "is_active": doctor.is_active
+    }
+
+@app.post("/chat/conversations/{conversation_id}/messages")
+def send_chat_message(
+    conversation_id: int,
+    chat_data: ChatMessageCreate,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user)
+):
+    # 1. Find the conversation
+    conversation = db.query(models.ChatConversation).filter(
+        models.ChatConversation.id == conversation_id
+    ).first()
+
+    if not conversation:
+        raise HTTPException(
+            status_code=404,
+            detail="Conversation not found"
+        )
+
+    # 2. Check whether the current user is a participant
+    is_patient = (
+        current_user.role == "patient"
+        and current_user.patient_id == conversation.patient_id
+    )
+
+    is_doctor = (
+        current_user.role == "doctor"
+        and current_user.doctor_id == conversation.doctor_id
+    )
+
+    if not (is_patient or is_doctor):
+        raise HTTPException(
+            status_code=403,
+            detail="You are not allowed to access this conversation"
+        )
+
+    # 3. Check whether the conversation is active
+    if not conversation.is_active:
+        raise HTTPException(
+            status_code=403,
+            detail="This conversation is closed"
+        )
+
+    # 4. Validate the message
+    message_text = chat_data.message.strip()
+
+    if not message_text:
+        raise HTTPException(
+            status_code=400,
+            detail="Message cannot be empty"
+        )
+
+    # 5. Validate the optional appointment ID
+    if chat_data.appointment_id is not None:
+        appointment = db.query(models.Appointment).filter(
+            models.Appointment.id == chat_data.appointment_id,
+            models.Appointment.patient_id == conversation.patient_id,
+            models.Appointment.doctor_id == conversation.doctor_id
+        ).first()
+
+        if not appointment:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid appointment for this conversation"
+            )
+
+    # 6. Create the message
+    new_message = models.ChatMessage(
+        conversation_id=conversation.id,
+        sender_user_id=current_user.id,
+        message=message_text,
+        appointment_id=chat_data.appointment_id
+    )
+
+    db.add(new_message)
+    db.commit()
+    db.refresh(new_message)
+
+    return {
+        "message": "Message sent successfully",
+        "data": {
+            "id": new_message.id,
+            "conversation_id": new_message.conversation_id,
+            "sender_user_id": new_message.sender_user_id,
+            "message": new_message.message,
+            "appointment_id": new_message.appointment_id,
+            "is_read": new_message.is_read,
+            "created_at": new_message.created_at
+        }
+    }
+@app.get("/chat/conversations/{conversation_id}/messages")
+def get_chat_messages(
+    conversation_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user)
+):
+    # 1. Find the conversation
+    conversation = db.query(models.ChatConversation).filter(
+        models.ChatConversation.id == conversation_id
+    ).first()
+
+    if not conversation:
+        raise HTTPException(
+            status_code=404,
+            detail="Conversation not found"
+        )
+
+    # 2. Verify that the user is a participant
+    is_patient = (
+        current_user.role == "patient"
+        and current_user.patient_id == conversation.patient_id
+    )
+
+    is_doctor = (
+        current_user.role == "doctor"
+        and current_user.doctor_id == conversation.doctor_id
+    )
+
+    if not (is_patient or is_doctor):
+        raise HTTPException(
+            status_code=403,
+            detail="You are not allowed to access this conversation"
+        )
+
+    # 3. Retrieve messages in chronological order
+    messages = db.query(models.ChatMessage).filter(
+        models.ChatMessage.conversation_id == conversation_id
+    ).order_by(
+        models.ChatMessage.created_at.asc(),
+        models.ChatMessage.id.asc()
+    ).all()
+
+    return {
+        "conversation_id": conversation_id,
+        "total_messages": len(messages),
+        "messages": [
+            {
+                "id": msg.id,
+                "sender_user_id": msg.sender_user_id,
+                "message": msg.message,
+                "appointment_id": msg.appointment_id,
+                "is_read": msg.is_read,
+                "created_at": msg.created_at
+            }
+            for msg in messages
+        ]
+    }
+
+@app.get("/chat/conversations")
+def get_my_conversations(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user)
+):
+    # Patient: find conversations belonging to this patient
+    if current_user.role == "patient":
+        conversations = db.query(models.ChatConversation).filter(
+            models.ChatConversation.patient_id == current_user.patient_id
+        ).order_by(
+            models.ChatConversation.created_at.desc()
+        ).all()
+
+    # Doctor: find conversations belonging to this doctor
+    elif current_user.role == "doctor":
+        conversations = db.query(models.ChatConversation).filter(
+            models.ChatConversation.doctor_id == current_user.doctor_id
+        ).order_by(
+            models.ChatConversation.created_at.desc()
+        ).all()
+
+    else:
+        raise HTTPException(
+            status_code=403,
+            detail="Only patients and doctors can access chat"
+        )
+
+    result = []
+
+    for conversation in conversations:
+
+        # Get patient details
+        patient = db.query(models.Patient).filter(
+            models.Patient.id == conversation.patient_id
+        ).first()
+
+        # Get doctor details
+        doctor = db.query(models.Doctor).filter(
+            models.Doctor.id == conversation.doctor_id
+        ).first()
+
+        # Get latest message
+        last_message = db.query(models.ChatMessage).filter(
+            models.ChatMessage.conversation_id == conversation.id
+        ).order_by(
+            models.ChatMessage.created_at.desc(),
+            models.ChatMessage.id.desc()
+        ).first()
+
+        result.append({
+            "conversation_id": conversation.id,
+            "patient_id": conversation.patient_id,
+            "patient_name": patient.name if patient else None,
+            "doctor_id": conversation.doctor_id,
+            "doctor_name": doctor.name if doctor else None,
+            "is_active": conversation.is_active,
+            "created_at": conversation.created_at,
+            "last_message": last_message.message if last_message else None,
+            "last_message_time": last_message.created_at if last_message else None
+        })
+
+    return {
+        "total_conversations": len(result),
+        "conversations": result
     }

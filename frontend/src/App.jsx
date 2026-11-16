@@ -24,7 +24,11 @@ import {
   LocateFixed,
 } from "lucide-react";
 import SmartIntakeBot from "./components/SmartIntakeBot";
+import Login from "./pages/Login";
 import { detectUserLocation } from "./utils/geolocation";
+import PatientRegister from "./pages/PatientRegister";
+import PatientDashboard from "./pages/PatientDashboard";
+import { API_BASE_URL } from "./config/api";
 
 const specialties = [
   { name: "Cardiology", icon: HeartPulse, color: "bg-rose-50 text-rose-600" },
@@ -59,12 +63,26 @@ const features = [
 
 function App() {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [showLogin, setShowLogin] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
   const [searchMode, setSearchMode] = useState("bot"); // "bot" or "manual"
   const [specialty, setSpecialty] = useState("");
   const [location, setLocation] = useState("");
   const [manualDoctors, setManualDoctors] = useState([]);
   const [searching, setSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
+  const [showRegister, setShowRegister] = useState(false);
+
+    const handleLoginSuccess = (data) => {
+    setCurrentUser(data);
+    setShowLogin(false);
+  };
+
+  const handleLogout = () => {
+    sessionStorage.removeItem("medilink_token");
+    sessionStorage.removeItem("medilink_role");
+    setCurrentUser(null);
+  };
 
   const handleSearch = async (event) => {
     if (event) event.preventDefault();
@@ -72,7 +90,7 @@ function App() {
     setHasSearched(true);
     try {
       const res = await axios.get(
-        `http://127.0.0.1:8000/recommend-doctors?specialization=${encodeURIComponent(
+        `${API_BASE_URL}/recommend-doctors?specialization=${encodeURIComponent(
           specialty
         )}${location ? `&location=${encodeURIComponent(location)}` : ""}`
       );
@@ -84,6 +102,64 @@ function App() {
       setSearching(false);
     }
   };
+  if (showRegister) {
+  return (
+    <PatientRegister
+      onBack={() => setShowRegister(false)}
+      onRegistrationSuccess={() => {
+        setShowRegister(false);
+        setShowLogin(true);
+      }}
+    />
+  );
+}
+
+    // Show login page
+  if (showLogin) {
+    return (
+      <Login
+  onLoginSuccess={handleLoginSuccess}
+  onBack={() => setShowLogin(false)}
+  onShowRegister={() => {
+    setShowLogin(false);
+    setShowRegister(true);
+  }}
+/>
+    );
+  }
+
+  // Dashboard after successful login
+  if (currentUser) {
+    if (currentUser.role === "patient") {
+      return (
+        <PatientDashboard
+          user={currentUser}
+          onLogout={handleLogout}
+        />
+      );
+    }
+
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-50">
+        <div className="rounded-2xl bg-white p-10 text-center shadow-lg">
+          <h1 className="text-2xl font-bold text-slate-900">
+            Welcome to MediLink!
+          </h1>
+
+          <p className="mt-3 text-slate-600">
+            Logged in as: {currentUser.role}
+          </p>
+
+          <button
+            onClick={handleLogout}
+            className="mt-6 rounded-xl bg-blue-600 px-6 py-3 text-white"
+          >
+            Logout
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-white text-slate-800">
@@ -107,10 +183,16 @@ function App() {
           </div>
 
           <div className="hidden items-center gap-3 md:flex">
-            <button className="px-4 py-2 font-semibold text-slate-700 hover:text-blue-600">
-              Log in
-            </button>
-            <button className="rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white shadow-lg shadow-blue-600/20 hover:bg-blue-700">
+            <button
+            onClick={() => setShowLogin(true)}
+            className="px-4 py-2 font-semibold text-slate-700 hover:text-blue-600"
+          >
+            Log in
+          </button>
+            <button
+              onClick={() => setShowLogin(true)}
+              className="rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white shadow-lg shadow-blue-600/20 hover:bg-blue-700"
+            >
               Get started <ArrowRight className="ml-2 inline" size={17} />
             </button>
           </div>
@@ -129,7 +211,13 @@ function App() {
             <a href="#home" className="block">Home</a>
             <a href="#specialties" className="block">Specialties</a>
             <a href="#features" className="block">Features</a>
-            <button className="w-full rounded-xl bg-blue-600 p-3 text-white">
+            <button
+              onClick={() => {
+                setShowLogin(true);
+                setMenuOpen(false);
+              }}
+              className="w-full rounded-xl bg-blue-600 p-3 text-white"
+            >
               Get started
             </button>
           </div>

@@ -1,6 +1,20 @@
 
 from database import Base
-from sqlalchemy import Column, Integer, String, Text, Float, Boolean
+from sqlalchemy import (
+    Column,
+    Integer,
+    String,
+    Text,
+    Float,
+    Boolean,
+    DateTime,
+    UniqueConstraint
+)
+from datetime import datetime, timezone
+
+
+def utc_now():
+    return datetime.now(timezone.utc)
 
 
 class Patient(Base):
@@ -91,3 +105,56 @@ class User(Base):
 
     patient_id = Column(Integer, nullable=True)
     doctor_id = Column(Integer, nullable=True)
+
+
+class Reminder(Base):
+    __tablename__ = "reminders"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    appointment_id = Column(Integer, nullable=False)
+    patient_id = Column(Integer, nullable=False)
+    doctor_id = Column(Integer, nullable=False)
+
+    reminder_type = Column(String, nullable=False)  # "24_HOURS", "2_HOURS", "15_MINUTES", "CUSTOM"
+    message = Column(Text, nullable=False)
+    scheduled_time = Column(String, nullable=False)
+    is_sent = Column(Boolean, default=False)
+    sent_at = Column(String, nullable=True)
+
+class ChatConversation(Base):
+    __tablename__ = "chat_conversations"
+
+    __table_args__ = (
+        UniqueConstraint(
+            "patient_id",
+            "doctor_id",
+            name="uq_patient_doctor_conversation"
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    patient_id = Column(Integer, nullable=False, index=True)
+    doctor_id = Column(Integer, nullable=False, index=True)
+
+    is_active = Column(Boolean, default=True, nullable=False)
+
+    created_at = Column(DateTime(timezone=True), default=utc_now)
+
+
+class ChatMessage(Base):
+    __tablename__ = "chat_messages"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    conversation_id = Column(Integer, nullable=False, index=True)
+    sender_user_id = Column(Integer, nullable=False)
+
+    message = Column(Text, nullable=False)
+
+    appointment_id = Column(Integer, nullable=True)
+
+    is_read = Column(Boolean, default=False, nullable=False)
+
+    created_at = Column(DateTime(timezone=True), default=utc_now)

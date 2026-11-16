@@ -1,6 +1,7 @@
 from pydantic import BaseModel, Field
 from typing import Optional
 from pydantic import BaseModel, Field, field_validator
+from datetime import datetime
 
 class PatientCreate(BaseModel):
     name: str
@@ -123,3 +124,30 @@ class ConsultationCreate(BaseModel):
 class UserLogin(BaseModel):
     email: str
     password: str
+
+
+class ReminderResponse(BaseModel):
+    id: int
+    appointment_id: int
+    patient_id: int
+    doctor_id: int
+    reminder_type: str
+    message: str
+    scheduled_time: str
+    is_sent: bool
+    sent_at: Optional[str] = None
+
+
+class ChatMessageCreate(BaseModel):
+    message: str = Field(min_length=1, max_length=5000)
+    appointment_id: Optional[int] = None
+
+
+class ChatMessageResponse(BaseModel):
+    id: int
+    conversation_id: int
+    sender_user_id: int
+    message: str
+    appointment_id: Optional[int] = None
+    is_read: bool
+    created_at: datetime
