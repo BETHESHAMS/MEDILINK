@@ -1251,10 +1251,22 @@ def login_user(
     credentials: UserLogin,
     db: Session = Depends(get_db)
 ):
+    login_id = credentials.email.strip().lower()
+
     # 1. Find the account by email
     user = db.query(models.User).filter(
-        models.User.email == credentials.email.lower()
+        models.User.email == login_id
     ).first()
+
+    # If not found by email, check if it matches a patient's mobile number
+    if user is None:
+        patient = db.query(models.Patient).filter(
+            models.Patient.phone == credentials.email.strip()
+        ).first()
+        if patient:
+            user = db.query(models.User).filter(
+                models.User.patient_id == patient.id
+            ).first()
 
     # 2. Verify the password
     if user is None or not password_hash.verify(
@@ -1263,7 +1275,7 @@ def login_user(
     ):
         raise HTTPException(
             status_code=401,
-            detail="Invalid email or password",
+            detail="Invalid email/mobile number or password",
             headers={"WWW-Authenticate": "Bearer"}
         )
 
@@ -1282,12 +1294,16 @@ def login_user(
     # 3. Generate an access token
     access_token = create_access_token(user)
 
-    # 4. Return the token
+    # 4. Return the token and profile identifiers
     return {
         "access_token": access_token,
         "token_type": "bearer",
         "expires_in": ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-        "role": user.role
+        "role": user.role,
+        "user_id": user.id,
+        "patient_id": user.patient_id,
+        "doctor_id": user.doctor_id,
+        "email": user.email
     }
 
 @app.patch("/doctors/{doctor_id}/deactivate")

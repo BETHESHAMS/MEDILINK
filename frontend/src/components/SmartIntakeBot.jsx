@@ -448,55 +448,57 @@ export default function SmartIntakeBot() {
   };
 
   return (
-    <div className="mx-auto max-w-4xl overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-2xl shadow-blue-500/10">
+    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 px-3 py-3 text-white sm:px-6 sm:py-4">
       {/* Bot Header */}
-      <div className="flex items-center justify-between border-b border-slate-100 bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 px-6 py-4 text-white">
-        <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/15 backdrop-blur-md">
-            <Bot size={24} className="text-white" />
+      <div className="flex items-center justify-between border-b border-slate-100 bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 px-3.5 sm:px-6 py-3 sm:py-4 text-white">
+        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+          <div className="flex h-9 w-9 sm:h-11 sm:w-11 shrink-0 items-center justify-center rounded-xl sm:rounded-2xl bg-white/15 backdrop-blur-md">
+            <Bot size={20} className="text-white sm:w-6 sm:h-6" />
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h3 className="font-bold tracking-tight">MediBot Health Intake</h3>
-              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-400/20 px-2.5 py-0.5 text-xs font-semibold text-emerald-200 backdrop-blur-sm">
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <h3 className="text-sm font-bold tracking-tight sm:text-base">
+                MediBot Health Intake
+              </h3>
+              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-400/20 px-2 py-0.5 text-[10px] sm:text-xs font-semibold text-emerald-200">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                Live AI Triage
+                Live Triage
               </span>
             </div>
-            <p className="text-xs text-blue-100/90">Symptom analysis, image intake & doctor matching</p>
+            <p className="text-[11px] sm:text-xs text-blue-100/90 truncate">Symptom analysis & specialist routing</p>
           </div>
         </div>
 
         <button
           onClick={resetChat}
-          className="flex items-center gap-1.5 rounded-xl bg-white/10 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-white/20"
+          className="flex items-center gap-1 rounded-lg sm:rounded-xl bg-white/10 px-2.5 py-1 sm:px-3 sm:py-1.5 text-[11px] sm:text-xs font-medium text-white transition hover:bg-white/20 shrink-0"
           title="Restart conversation"
         >
-          <RotateCcw size={14} />
-          Reset
+          <RotateCcw size={13} />
+          <span>Reset</span>
         </button>
       </div>
 
       {/* Message Area */}
-      <div className="h-[480px] overflow-y-auto bg-slate-50/50 p-6 space-y-5">
+      <div className="h-[380px] sm:h-[480px] overflow-y-auto bg-slate-50/50 p-3.5 sm:p-6 space-y-3.5 sm:space-y-4">
         {messages.map((msg) => (
           <div
             key={msg.id}
-            className={`flex items-start gap-3 ${msg.sender === "user" ? "flex-row-reverse" : ""}`}
+            className={`flex items-start gap-2.5 sm:gap-3 ${msg.sender === "user" ? "flex-row-reverse" : ""}`}
           >
             {/* Avatar */}
             <div
-              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
+              className={`flex h-7 w-7 sm:h-8 sm:w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
                 msg.sender === "user"
                   ? "bg-blue-600 text-white"
                   : "bg-emerald-100 text-emerald-700"
               }`}
             >
-              {msg.sender === "user" ? <User size={16} /> : <Bot size={16} />}
+              {msg.sender === "user" ? <User size={15} /> : <Bot size={15} />}
             </div>
 
             {/* Bubble Content */}
-            <div className={`max-w-[85%] space-y-2 ${msg.sender === "user" ? "items-end" : ""}`}>
+            <div className={`max-w-[88%] sm:max-w-[85%] space-y-1.5 sm:space-y-2 ${msg.sender === "user" ? "items-end" : ""}`}>
               {msg.isEmergency ? (
                 <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-rose-900 shadow-sm">
                   <div className="flex items-center gap-2 font-bold text-rose-700">
@@ -652,13 +654,13 @@ export default function SmartIntakeBot() {
       )}
 
       {/* Input Bar */}
-      <div className="border-t border-slate-100 bg-white p-4">
+      <div className="border-t border-slate-100 bg-white p-2.5 sm:p-4">
         <form
           onSubmit={(e) => {
             e.preventDefault();
             handleSendMessage();
           }}
-          className="flex items-center gap-2"
+          className="flex items-center gap-1.5 sm:gap-2"
         >
           {/* File Upload Button */}
           <input
@@ -671,20 +673,20 @@ export default function SmartIntakeBot() {
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-slate-200 text-slate-500 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-600"
+            className="flex h-9 w-9 sm:h-11 sm:w-11 shrink-0 items-center justify-center rounded-xl sm:rounded-2xl border border-slate-200 text-slate-500 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-600"
             title="Attach a symptom photo (e.g. skin rash)"
           >
-            <Paperclip size={18} />
+            <Paperclip size={16} />
           </button>
 
           {/* Auto-detect Location Button */}
           <button
             type="button"
             onClick={handleAutoDetectLocation}
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-slate-200 text-slate-500 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-600"
+            className="flex h-9 w-9 sm:h-11 sm:w-11 shrink-0 items-center justify-center rounded-xl sm:rounded-2xl border border-slate-200 text-slate-500 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-600"
             title="Auto-detect current location (GPS)"
           >
-            <LocateFixed size={18} />
+            <LocateFixed size={16} />
           </button>
 
           {/* Text Input */}
@@ -692,24 +694,24 @@ export default function SmartIntakeBot() {
             type="text"
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
-            placeholder="Type your symptoms (e.g. skin rash, joint ache, fever)..."
-            className="flex-1 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-blue-500 focus:bg-white"
+            placeholder="Type symptoms (e.g. skin rash, fever)..."
+            className="flex-1 min-w-0 rounded-xl sm:rounded-2xl border border-slate-200 bg-slate-50 px-3 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm outline-none transition focus:border-blue-500 focus:bg-white"
           />
 
           {/* Send Button */}
           <button
             type="submit"
             disabled={!inputText.trim() && !selectedImage}
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-md shadow-blue-500/20 transition hover:bg-blue-700 disabled:opacity-40 disabled:hover:bg-blue-600"
+            className="flex h-9 w-9 sm:h-11 sm:w-11 shrink-0 items-center justify-center rounded-xl sm:rounded-2xl bg-blue-600 text-white shadow-md shadow-blue-500/20 transition hover:bg-blue-700 disabled:opacity-40 disabled:hover:bg-blue-600"
           >
-            <Send size={18} />
+            <Send size={16} />
           </button>
         </form>
 
-        <div className="mt-2.5 flex items-center justify-between px-1 text-[11px] text-slate-400">
+        <div className="mt-2 flex items-center justify-between px-1 text-[10px] sm:text-[11px] text-slate-400">
           <span className="flex items-center gap-1">
-            <ShieldCheck size={12} className="text-emerald-500" />
-            Confidential intake • Encrypted data
+            <ShieldCheck size={11} className="text-emerald-500" />
+            Confidential intake
           </span>
           <span>MediLink Smart Triage v1.0</span>
         </div>
@@ -717,13 +719,13 @@ export default function SmartIntakeBot() {
 
       {/* Booking Slot Modal Drawer */}
       {bookingDoctor && (
-        <div className="border-t border-blue-100 bg-blue-50/70 p-6">
+        <div className="border-t border-blue-100 bg-blue-50/70 p-3.5 sm:p-6">
           <div className="flex items-center justify-between">
             <div>
-              <h4 className="font-bold text-slate-900">
+              <h4 className="font-bold text-slate-900 text-xs sm:text-sm">
                 Book Slot with {bookingDoctor.name}
               </h4>
-              <p className="text-xs text-slate-600">
+              <p className="text-[11px] sm:text-xs text-slate-600">
                 {bookingDoctor.specialization} • {bookingDoctor.hospital}
               </p>
             </div>
@@ -731,7 +733,7 @@ export default function SmartIntakeBot() {
               onClick={() => setBookingDoctor(null)}
               className="rounded-lg p-1 text-slate-400 hover:bg-white hover:text-slate-600"
             >
-              <X size={18} />
+              <X size={16} />
             </button>
           </div>
 

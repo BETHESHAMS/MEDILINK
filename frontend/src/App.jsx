@@ -13,6 +13,7 @@ import {
   ShieldCheck,
   Stethoscope,
   Users,
+  User,
   Video,
   X,
   Sparkles,
@@ -64,24 +65,37 @@ const features = [
 function App() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
+  const [showRegister, setShowRegister] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
+  const [currentView, setCurrentView] = useState("home"); // "home" or "dashboard"
   const [searchMode, setSearchMode] = useState("bot"); // "bot" or "manual"
   const [specialty, setSpecialty] = useState("");
   const [location, setLocation] = useState("");
   const [manualDoctors, setManualDoctors] = useState([]);
   const [searching, setSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
-  const [showRegister, setShowRegister] = useState(false);
 
-    const handleLoginSuccess = (data) => {
+  const handleLoginSuccess = (data) => {
     setCurrentUser(data);
     setShowLogin(false);
+    setShowRegister(false);
+    setCurrentView("dashboard");
   };
 
   const handleLogout = () => {
     sessionStorage.removeItem("medilink_token");
     sessionStorage.removeItem("medilink_role");
     setCurrentUser(null);
+    setCurrentView("home");
+  };
+
+  const handleGoHome = (e) => {
+    if (e) e.preventDefault();
+    setShowLogin(false);
+    setShowRegister(false);
+    setCurrentView("home");
+    setMenuOpen(false);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const handleSearch = async (event) => {
@@ -102,60 +116,69 @@ function App() {
       setSearching(false);
     }
   };
-  if (showRegister) {
-  return (
-    <PatientRegister
-      onBack={() => setShowRegister(false)}
-      onRegistrationSuccess={() => {
-        setShowRegister(false);
-        setShowLogin(true);
-      }}
-    />
-  );
-}
 
-    // Show login page
-  if (showLogin) {
+  if (showRegister) {
     return (
-      <Login
-  onLoginSuccess={handleLoginSuccess}
-  onBack={() => setShowLogin(false)}
-  onShowRegister={() => {
-    setShowLogin(false);
-    setShowRegister(true);
-  }}
-/>
+      <PatientRegister
+        onBack={handleGoHome}
+        onRegistrationSuccess={() => {
+          setShowRegister(false);
+          setShowLogin(true);
+        }}
+      />
     );
   }
 
-  // Dashboard after successful login
-  if (currentUser) {
+  // Show login page
+  if (showLogin) {
+    return (
+      <Login
+        onLoginSuccess={handleLoginSuccess}
+        onBack={handleGoHome}
+        onShowRegister={() => {
+          setShowLogin(false);
+          setShowRegister(true);
+        }}
+      />
+    );
+  }
+
+  // Dashboard after successful login when in "dashboard" view
+  if (currentUser && currentView === "dashboard") {
     if (currentUser.role === "patient") {
       return (
         <PatientDashboard
           user={currentUser}
           onLogout={handleLogout}
+          onGoHome={handleGoHome}
         />
       );
     }
 
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50">
-        <div className="rounded-2xl bg-white p-10 text-center shadow-lg">
-          <h1 className="text-2xl font-bold text-slate-900">
-            Welcome to MediLink!
-          </h1>
-
-          <p className="mt-3 text-slate-600">
-            Logged in as: {currentUser.role}
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
+        <div className="rounded-3xl bg-white p-8 shadow-xl text-center max-w-sm border border-slate-100">
+          <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-md shadow-blue-500/20">
+            <HeartPulse size={28} />
+          </div>
+          <h1 className="text-xl font-bold text-slate-900">Doctor Portal</h1>
+          <p className="mt-2 text-xs text-slate-500 leading-relaxed">
+            Logged in as Dr. ({currentUser.email || "Doctor"}). The doctor clinical dashboard will be available in the next release.
           </p>
-
-          <button
-            onClick={handleLogout}
-            className="mt-6 rounded-xl bg-blue-600 px-6 py-3 text-white"
-          >
-            Logout
-          </button>
+          <div className="mt-6 flex flex-col gap-2.5">
+            <button
+              onClick={handleGoHome}
+              className="w-full rounded-xl border border-slate-200 py-3 text-xs font-bold text-slate-700 hover:bg-slate-50 transition"
+            >
+              Back to Main Website
+            </button>
+            <button
+              onClick={handleLogout}
+              className="w-full rounded-xl bg-blue-600 py-3 text-xs font-bold text-white shadow-md shadow-blue-600/20 hover:bg-blue-700 transition"
+            >
+              Logout
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -166,35 +189,59 @@ function App() {
       {/* Navbar */}
       <header className="sticky top-0 z-50 border-b border-slate-100 bg-white/95 backdrop-blur">
         <nav className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
-          <a href="#" className="flex items-center gap-2">
-            <div className="rounded-xl bg-blue-600 p-2 text-white">
+          <div
+            onClick={handleGoHome}
+            className="flex items-center gap-2 cursor-pointer select-none group"
+            title="Return to Main Website"
+          >
+            <div className="rounded-xl bg-blue-600 p-2 text-white shadow-md shadow-blue-500/20 transition group-hover:scale-105">
               <HeartPulse size={25} />
             </div>
             <span className="text-2xl font-bold tracking-tight">
               Medi<span className="text-blue-600">Link</span>
             </span>
-          </a>
+          </div>
 
           <div className="hidden items-center gap-8 text-sm font-medium text-slate-600 md:flex">
-            <a href="#home" className="hover:text-blue-600">Home</a>
-            <a href="#specialties" className="hover:text-blue-600">Specialties</a>
-            <a href="#features" className="hover:text-blue-600">Features</a>
-            <a href="#about" className="hover:text-blue-600">About</a>
+            <a href="#home" onClick={handleGoHome} className="hover:text-blue-600 transition">Home</a>
+            <a href="#specialties" className="hover:text-blue-600 transition">Specialties</a>
+            <a href="#features" className="hover:text-blue-600 transition">Features</a>
+            <a href="#about" className="hover:text-blue-600 transition">About</a>
           </div>
 
           <div className="hidden items-center gap-3 md:flex">
-            <button
-            onClick={() => setShowLogin(true)}
-            className="px-4 py-2 font-semibold text-slate-700 hover:text-blue-600"
-          >
-            Log in
-          </button>
-            <button
-              onClick={() => setShowLogin(true)}
-              className="rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white shadow-lg shadow-blue-600/20 hover:bg-blue-700"
-            >
-              Get started <ArrowRight className="ml-2 inline" size={17} />
-            </button>
+            {currentUser ? (
+              <>
+                <button
+                  onClick={() => setCurrentView("dashboard")}
+                  className="flex items-center gap-1.5 rounded-xl bg-blue-50 px-4 py-2 text-sm font-bold text-blue-700 hover:bg-blue-100 transition"
+                >
+                  <User size={16} />
+                  My Dashboard
+                </button>
+                <button
+                  onClick={handleLogout}
+                  className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition"
+                >
+                  Logout
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  onClick={() => setShowLogin(true)}
+                  className="px-4 py-2 font-semibold text-slate-700 hover:text-blue-600 transition"
+                >
+                  Log in
+                </button>
+                <button
+                  onClick={() => setShowRegister(true)}
+                  className="rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white shadow-lg shadow-blue-600/20 hover:bg-blue-700 transition"
+                >
+                  Get started <ArrowRight className="ml-2 inline" size={17} />
+                </button>
+              </>
+            )}
           </div>
 
           <button
@@ -208,18 +255,53 @@ function App() {
 
         {menuOpen && (
           <div className="space-y-4 border-t border-slate-100 bg-white p-6 md:hidden">
-            <a href="#home" className="block">Home</a>
-            <a href="#specialties" className="block">Specialties</a>
-            <a href="#features" className="block">Features</a>
-            <button
-              onClick={() => {
-                setShowLogin(true);
-                setMenuOpen(false);
-              }}
-              className="w-full rounded-xl bg-blue-600 p-3 text-white"
-            >
-              Get started
-            </button>
+            <a href="#home" onClick={handleGoHome} className="block font-medium">Home</a>
+            <a href="#specialties" onClick={() => setMenuOpen(false)} className="block font-medium">Specialties</a>
+            <a href="#features" onClick={() => setMenuOpen(false)} className="block font-medium">Features</a>
+            
+            {currentUser ? (
+              <div className="pt-2 space-y-2 border-t border-slate-100">
+                <button
+                  onClick={() => {
+                    setCurrentView("dashboard");
+                    setMenuOpen(false);
+                  }}
+                  className="w-full rounded-xl bg-blue-600 p-3 text-sm font-bold text-white shadow-md shadow-blue-600/20"
+                >
+                  Go to My Dashboard
+                </button>
+                <button
+                  onClick={() => {
+                    handleLogout();
+                    setMenuOpen(false);
+                  }}
+                  className="w-full rounded-xl border border-slate-200 p-2.5 text-sm font-semibold text-slate-600"
+                >
+                  Logout
+                </button>
+              </div>
+            ) : (
+              <div className="pt-2 space-y-2 border-t border-slate-100">
+                <button
+                  onClick={() => {
+                    setShowLogin(true);
+                    setMenuOpen(false);
+                  }}
+                  className="w-full rounded-xl border border-slate-200 p-3 text-sm font-semibold text-slate-700"
+                >
+                  Log in
+                </button>
+                <button
+                  onClick={() => {
+                    setShowRegister(true);
+                    setMenuOpen(false);
+                  }}
+                  className="w-full rounded-xl bg-blue-600 p-3 text-sm font-bold text-white shadow-md shadow-blue-600/20"
+                >
+                  Get started
+                </button>
+              </div>
+            )}
           </div>
         )}
       </header>
