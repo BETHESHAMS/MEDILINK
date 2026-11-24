@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { detectUserLocation } from "../utils/geolocation";
 import { API_BASE_URL } from "../config/api";
+import "./SmartIntakeBot.css";
 
 const API_BASE = API_BASE_URL;
 
@@ -448,16 +449,16 @@ export default function SmartIntakeBot() {
   };
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 px-3 py-3 text-white sm:px-6 sm:py-4">
+    <div className="chat-container">
       {/* Bot Header */}
-      <div className="flex items-center justify-between border-b border-slate-100 bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 px-3.5 sm:px-6 py-3 sm:py-4 text-white">
-        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-          <div className="flex h-9 w-9 sm:h-11 sm:w-11 shrink-0 items-center justify-center rounded-xl sm:rounded-2xl bg-white/15 backdrop-blur-md">
+      <div className="chat-header">
+        <div className="chat-header-info">
+          <div className="chat-header-icon">
             <Bot size={20} className="text-white sm:w-6 sm:h-6" />
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-1.5 sm:gap-2">
-              <h3 className="text-sm font-bold tracking-tight sm:text-base">
+              <h3 className="chat-header-title">
                 MediBot Health Intake
               </h3>
               <span className="inline-flex items-center gap-1 rounded-full bg-emerald-400/20 px-2 py-0.5 text-[10px] sm:text-xs font-semibold text-emerald-200">
@@ -465,13 +466,13 @@ export default function SmartIntakeBot() {
                 Live Triage
               </span>
             </div>
-            <p className="text-[11px] sm:text-xs text-blue-100/90 truncate">Symptom analysis & specialist routing</p>
+            <p className="chat-header-subtitle">Symptom analysis & specialist routing</p>
           </div>
         </div>
 
         <button
           onClick={resetChat}
-          className="flex items-center gap-1 rounded-lg sm:rounded-xl bg-white/10 px-2.5 py-1 sm:px-3 sm:py-1.5 text-[11px] sm:text-xs font-medium text-white transition hover:bg-white/20 shrink-0"
+          className="chat-reset-button"
           title="Restart conversation"
         >
           <RotateCcw size={13} />
@@ -480,7 +481,7 @@ export default function SmartIntakeBot() {
       </div>
 
       {/* Message Area */}
-      <div className="h-[380px] sm:h-[480px] overflow-y-auto bg-slate-50/50 p-3.5 sm:p-6 space-y-3.5 sm:space-y-4">
+      <div className="chat-messages">
         {messages.map((msg) => (
           <div
             key={msg.id}
@@ -509,7 +510,7 @@ export default function SmartIntakeBot() {
                 </div>
               ) : (
                 <div
-                  className={`rounded-2xl px-5 py-3.5 text-sm leading-relaxed shadow-sm ${
+                  className={`max-w-full break-words rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-sm ${
                     msg.sender === "user"
                       ? "bg-blue-600 text-white rounded-tr-none"
                       : "bg-white text-slate-800 border border-slate-100 rounded-tl-none"
@@ -613,16 +614,16 @@ export default function SmartIntakeBot() {
 
       {/* Quick Prompts Bar (when on initial symptoms step) */}
       {step === "symptoms" && (
-        <div className="border-t border-slate-100 bg-white px-5 py-2.5">
-          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-            Suggested Symptoms to test:
-          </p>
-          <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
+            <div className="w-full min-w-0 border-t border-slate-100 bg-white px-3 py-3 sm:px-5 sm:py-4">
+      <p className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+        Suggested symptoms
+      </p>
+      <div className="flex flex-wrap gap-2">
             {quickPrompts.map((p) => (
               <button
                 key={p.label}
                 onClick={() => handleSendMessage(p.symptoms)}
-                className="shrink-0 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs text-slate-700 hover:border-blue-400 hover:bg-blue-50/50"
+                className="max-w-full rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-relaxed text-slate-700 transition hover:border-blue-400 hover:bg-blue-50"
               >
                 {p.label}
               </button>

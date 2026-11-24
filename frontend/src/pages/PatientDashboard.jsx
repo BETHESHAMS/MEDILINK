@@ -44,11 +44,7 @@ function PatientDashboard({ user, onLogout, onGoHome }) {
 
   const patientId = user?.patient_id;
 
-  useEffect(() => {
-    if (patientId) {
-      loadDashboardData();
-    }
-  }, [patientId]);
+  
 
   const loadDashboardData = async () => {
     setLoading(true);
@@ -103,6 +99,12 @@ function PatientDashboard({ user, onLogout, onGoHome }) {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (patientId) {
+      loadDashboardData();
+    }
+  }, [patientId]);
 
   const handleCancelAppointment = async (appointmentId) => {
     if (!window.confirm("Are you sure you want to cancel this appointment?")) {
